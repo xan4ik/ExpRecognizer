@@ -28,7 +28,7 @@ namespace ConsoleApp6
             //}
             //Console.WriteLine();
 
-            var tokens = (new ContextParser()).Parse(result);
+            var tokens = (new TokenToQueryConverter()).Parse(result);
             foreach (var item in tokens)
             {
                 Console.WriteLine(item.Value + " " + item.Type.ToString());
@@ -41,14 +41,14 @@ namespace ConsoleApp6
         }
     }
 
-    public struct Operation : IComparable<Operation>
+    public struct FunctionProfile : IComparable<FunctionProfile>
     {
         public readonly string Type;
         public readonly int Priority;
         public readonly bool LeftSided;
         public readonly int ArgumentCount;
 
-        public Operation(string operation, int priority, int argc, bool leftsided = true)
+        public FunctionProfile(string operation, int priority, int argc, bool leftsided = true)
         {
             Type = operation;
             Priority = priority;
@@ -61,7 +61,7 @@ namespace ConsoleApp6
             return type == Type;
         }
 
-        public int CompareTo(Operation other)
+        public int CompareTo(FunctionProfile other)
         {
             return this.Priority - other.Priority;
         }
@@ -150,14 +150,14 @@ namespace ConsoleApp6
             throw new Exception("Wrong character");
         }
     }
-    public class ContextParser
+    public class TokenToQueryConverter
     {
         private Stack<Token> operationsStack;
         private StringBuilder output;
         private StringBuilder buffer;
 
 
-        public ContextParser()
+        public TokenToQueryConverter()
         {
             operationsStack = new Stack<Token>();
             output = new StringBuilder();
@@ -268,7 +268,7 @@ namespace ConsoleApp6
 
     public static class Context
     {
-        private static Dictionary<string, Operation> operations;
+        private static Dictionary<string, FunctionProfile> operations;
         private static Dictionary<string, float> variables;
         private static Dictionary<string, FunctionExpression> functions;
 
@@ -286,15 +286,15 @@ namespace ConsoleApp6
                 {"max", new MaxExpression() },
             };
 
-            operations = new Dictionary<string, Operation>()
+            operations = new Dictionary<string, FunctionProfile>()
             {
-                {"+", new Operation("+", 2, 2) },
-                {"-", new Operation("-", 2, 2) },
-                {"/", new Operation("/", 4, 2) },
-                {"*", new Operation("*", 4, 2) },
-                {"^", new Operation("^", 6, 2, false) },
-                {"sin", new Operation("sin", 10, 1, false) },
-                {"max", new Operation("max", 10, 2, false) }
+                {"+", new FunctionProfile("+", 2, 2) },
+                {"-", new FunctionProfile("-", 2, 2) },
+                {"/", new FunctionProfile("/", 4, 2) },
+                {"*", new FunctionProfile("*", 4, 2) },
+                {"^", new FunctionProfile("^", 6, 2, false) },
+                {"sin", new FunctionProfile("sin", 10, 1, false) },
+                {"max", new FunctionProfile("max", 10, 2, false) }
             };
 
             variables = new Dictionary<string, float>()
