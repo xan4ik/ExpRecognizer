@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using static ConsoleApp6.ExpressionTreeCreator;
 
@@ -27,15 +28,23 @@ namespace ConsoleApp6
             //    Console.WriteLine(item.Value + " " + item.Type.ToString());
             //}
             //Console.WriteLine();
-
-            var tokens = (new TokenToQueryConverter()).Parse(result);
-            foreach (var item in tokens)
+            try
             {
-                Console.WriteLine(item.Value + " " + item.Type.ToString());
+                var tokens = (new PolishEntryConverter()).TryConvert(result);
+                foreach (var item in tokens)
+                {
+                    Console.WriteLine(item.Value + " " + item.Type.ToString());
+                }
+
+                var exp = (new ExpressionTreeCreator()).CreateTree(tokens);
+                Console.WriteLine(exp.Calculate());
+            }
+            catch (Exception ex) 
+            {
+                Console.WriteLine(ex.Message) ;
             }
 
-            var exp = (new ExpressionTreeCreator()).CreateTree(tokens);
-            Console.WriteLine(exp.Calculate());
+            
             //выделить блоки, разбить, парситьы
             //парсить выражения в скобках
         }
@@ -43,14 +52,14 @@ namespace ConsoleApp6
 
     public struct FunctionProfile : IComparable<FunctionProfile>
     {
-        public readonly string Type;
+        public readonly string FunctionName;
         public readonly int Priority;
         public readonly bool LeftSided;
         public readonly int ArgumentCount;
 
         public FunctionProfile(string operation, int priority, int argc, bool leftsided = true)
         {
-            Type = operation;
+            FunctionName = operation;
             Priority = priority;
             LeftSided = leftsided;
             ArgumentCount = argc;
@@ -58,7 +67,7 @@ namespace ConsoleApp6
 
         public bool Is(string type)
         {
-            return type == Type;
+            return type == FunctionName;
         }
 
         public int CompareTo(FunctionProfile other)
@@ -150,38 +159,25 @@ namespace ConsoleApp6
             throw new Exception("Wrong character");
         }
     }
-    public class TokenToQueryConverter
+    public class PolishEntryConverter
     {
         private Stack<Token> operationsStack;
-        private StringBuilder output;
-        private StringBuilder buffer;
 
-
-        public TokenToQueryConverter()
+        public PolishEntryConverter()
         {
             operationsStack = new Stack<Token>();
-            output = new StringBuilder();
-            buffer = new StringBuilder();
         }
 
-        public IEnumerable<Token> Parse(IEnumerable<Token> tokens)
+
+        public IEnumerable<Token> TryConvert(IEnumerable<Token> tokens)
         {
             Reset();
-            foreach (var item in Process(tokens))
-            {
-                yield return item;
-            }
-            foreach (var item in Finish())
-            {
-                yield return item;
-            }
-            //return output.ToString();
+            return Process(tokens).Concat<Token>(Finish());
         }
 
         private void Reset()
         {
             operationsStack.Clear();
-            output.Clear();
         }
 
         private IEnumerable<Token> Process(IEnumerable<Token> tokens)
@@ -204,7 +200,7 @@ namespace ConsoleApp6
                         }
                     case (TokenType.CloseBracket):
                         {
-                            foreach (var item in HandleCloseBracket())
+                            foreach (var item in ProcessCloseBracket())
                             {
                                 yield return item;
                             }
@@ -212,7 +208,7 @@ namespace ConsoleApp6
                         }
                     case (TokenType.Operator):
                         {
-                            foreach (var item in HandleOperation(token))
+                            foreach (var item in ProcessOperation(token))
                             {
                                 yield return item;
                             }
@@ -230,16 +226,16 @@ namespace ConsoleApp6
             }
         }
 
-        private IEnumerable<Token> HandleCloseBracket()
+        private IEnumerable<Token> ProcessCloseBracket()
         {
             while (IsOperationExist(operationsStack) && operationsStack.Peek().Type != TokenType.OpenBracket)
             {
                 yield return operationsStack.Pop();
             }
-            operationsStack.Pop();
+            operationsStack.Pop();    
         }
 
-        private IEnumerable<Token> HandleOperation(Token operation)
+        private IEnumerable<Token> ProcessOperation(Token operation)
         {
             while (IsOperationExist(operationsStack) &&
                     (operationsStack.Peek().Type != TokenType.OpenBracket) &&
@@ -256,20 +252,87 @@ namespace ConsoleApp6
         {
             return operationsStack.Count != 0;
         }
+    }
 
-        private void ToOutput(string value)
+    public class BadSyntaxException : Exception
+    {
+        public BadSyntaxException(string message) : base(message)
+        { }
+
+        public BadSyntaxException(string message, Exception innerException) : base(message, innerException)
+        { }
+    }
+
+    public class ObjectNotExistException : Exception 
+    {
+        public ObjectNotExistException(string message) : base(message)
+        { }
+    }
+
+    public class ObjectAlreadyExistException : Exception
+    {
+        public ObjectAlreadyExistException(string message) : base(message)
+        { }
+    }
+
+    public class TreeCreateException : Exception 
+    {
+        public TreeCreateException(string message, Exception exception) : base(message, exception)
+        { }
+    }
+
+    public class CalculationException : Exception 
+    {
+        public CalculationException(string message) : base(message)
+        { }
+
+
+        public CalculationException(string message, Exception exception) : base(message, exception)
+        { }
+    }
+
+    public class Variable 
+    {
+        public readonly string Name;
+        
+        private bool isReadOnly;
+        private float value;
+
+        public Variable(string name, float value, bool readOnly = false)
         {
-            output.Append(value);
-            output.Append(' ');
+            this.value = value;
+            this.isReadOnly = readOnly;
+
+            Name = name;
+        }
+
+        public bool IsConst 
+        {
+            get 
+            {
+                return isReadOnly;
+            }
+        }
+
+        public float GetValue() 
+        {
+            return value;
+        }
+
+        public void SetValue(float value) 
+        {
+            if (isReadOnly) 
+            {
+                throw new CalculationException("Can't change const value");            
+            }
+
+            this.value = value;
         }
     }
 
-
-
     public static class Context
     {
-        private static Dictionary<string, FunctionProfile> operations;
-        private static Dictionary<string, float> variables;
+        private static Dictionary<string, Variable> variables;
         private static Dictionary<string, FunctionExpression> functions;
 
         static Context()
@@ -283,64 +346,105 @@ namespace ConsoleApp6
                 {"*", new MultiplyOperator() },
                 {"/", new DevideOperator() },
                 {"sin", new SinExpression() },
-                {"max", new MaxExpression() },
+                {"max", new MaxExpression() }
             };
 
-            operations = new Dictionary<string, FunctionProfile>()
+            variables = new Dictionary<string, Variable>()
             {
-                {"+", new FunctionProfile("+", 2, 2) },
-                {"-", new FunctionProfile("-", 2, 2) },
-                {"/", new FunctionProfile("/", 4, 2) },
-                {"*", new FunctionProfile("*", 4, 2) },
-                {"^", new FunctionProfile("^", 6, 2, false) },
-                {"sin", new FunctionProfile("sin", 10, 1, false) },
-                {"max", new FunctionProfile("max", 10, 2, false) }
-            };
-
-            variables = new Dictionary<string, float>()
-            {
-                {"Pi", (float)Math.PI }
+                {"Pi", new Variable("Pi", (float)(22/7f), true) }
             };
         }
 
-        public static FunctionExpression GetFunction(string name) 
+        public static FunctionExpression CreateFunction(string name)
         {
-            return functions[name].Clone();   
+            if (functions.ContainsKey(name))
+            {
+                return functions[name].Clone();
+            }
+            throw new ObjectNotExistException(String.Format("Function of {0} not exist", name));
+            
         }
 
         public static int CompareOperations(string left, string right)
         {
-            return operations[left].CompareTo(operations[right]);
+            try
+            {
+                var _leftFunction = functions[left].Profile;
+                var _rightFunction = functions[right].Profile;
+
+                return _leftFunction.CompareTo(_rightFunction);
+            }
+            catch (KeyNotFoundException)
+            {
+                throw new ObjectNotExistException(String.Format("One of function {0}\\{1} not exist", left, right));
+            }
         }
 
         public static bool ContainsOperation(string operation)
         {
-            return operations.ContainsKey(operation);
+            return functions.ContainsKey(operation);
         }
 
+        public static bool ContainsVariable(string variable)
+        {
+            return variables.ContainsKey(variable);
+        }
+
+
+        // TODO: remove this
         public static bool IsOperationLeftSided(string operation)
         {
-            return operations[operation].LeftSided;
+            if (functions.ContainsKey(operation))
+            {
+                return functions[operation].Profile.LeftSided;
+            }
+            throw new ObjectNotExistException(String.Format("Function of {0} not exist", operation));
         }
 
-        public static int GetAgrumentsCount(string operation)
-        {
-            return operations[operation].ArgumentCount;
-        }
+        public static Variable GetVariable(string name)
+        {    
+            if (variables.ContainsKey(name))
+            {
+                return variables[name];
+            }
+            throw new ObjectNotExistException(String.Format("Variable of {0} not exist", name));
+        } 
 
-        public static float GetVariableValue(string name)
+        public static void AddVariable(string name, Variable value)
         {
-            return variables[name];
-        }
-
-        public static void AddVariable(string name, float value)
-        {
-            variables.Add(name, value);
+            if (!variables.ContainsKey(name))
+            {
+                variables.Add(name, value);
+            }
+            else throw new ObjectAlreadyExistException(String.Format("Variable of {0} not exist", name));   
         }
 
         public static void RemoveVariable(string name)
         {
-            variables.Remove(name);
+            if (variables.ContainsKey(name))
+            {
+                variables.Remove(name);
+            }
+            else throw new ObjectAlreadyExistException(String.Format("Variable of {0} not exist", name));
+        }
+
+        public static void AddFunction(FunctionExpression expression) 
+        {
+            var profile = expression.Profile.FunctionName;
+            if (!functions.ContainsKey(profile))
+            {
+                functions.Add(profile, expression);
+            }
+            else throw new ObjectAlreadyExistException(String.Format("Function of {0} not exist", profile));
+        }
+
+        public static void RemoveFunction(string functionName) 
+        {
+            if (functions.ContainsKey(functionName)) 
+            {
+                functions.Remove(functionName);
+            }
+            else throw new ObjectNotExistException(String.Format("Function of {0} not exist", functionName));
         }
     }
 
@@ -360,241 +464,303 @@ namespace ConsoleApp6
                 switch (item.Type)
                 {
                     case (TokenType.Number):
-                        buffer.Push(new NumberExpression(item.Value));
-                        break;
-                    case (TokenType.Variable):
-                        buffer.Push(new VariableExpression(item.Value));
-                        break;
-                    case (TokenType.Operator): 
-                    case (TokenType.Function):
                         {
-                            var function = Context.GetFunction(item.Value);
-                            for (int i = Context.GetAgrumentsCount(item.Value) - 1; i >= 0; i--)
-                            {
-                                function.SetArgument(i, buffer.Pop());
-                            }
-                            buffer.Push(function);
+                            buffer.Push(GetNumber(item.Value));
                             break;
                         }
-                  
+                    case (TokenType.Variable):
+                        {
+                            buffer.Push(GetVariable(item.Value));
+                            break;
+                        }
+                    case (TokenType.Operator):
+                    case (TokenType.Function):
+                        {
+                            buffer.Push(GetFunction(item.Value));
+                            break;
+                        }
+
                 }
             }
             return buffer.Pop();
         }
 
-
-        public abstract class Expression
+        private Expression GetNumber(string value) 
         {
-            public abstract float Calculate();
-        }
-
-        public abstract class OperationExpression : Expression
-        {
-            protected readonly Expression left;
-            protected readonly Expression right;
-
-            public OperationExpression(Expression left, Expression right)
+            try
             {
-                this.left = left;
-                this.right = right;
-            }
-
-            public abstract OperationExpression CreateSameOperator(Expression left, Expression right);
-        }
-
-
-        public class PowOperator : FunctionExpression
-        {
-            public PowOperator() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return (float)Math.Pow(GetArgument(0), GetArgument(1));
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new PowOperator();
-            }
-        }
-
-
-        public class MultiplyOperator : FunctionExpression
-        {
-            public MultiplyOperator() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return GetArgument(0) * GetArgument(1);
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new MultiplyOperator();
-            }
-        }
-
-        public class DevideOperator : FunctionExpression
-        {
-            public DevideOperator() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return GetArgument(0) / GetArgument(1);
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new DevideOperator();
-            }
-        }
-
-
-        public class SumOperator : FunctionExpression
-        {
-            public SumOperator() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return GetArgument(0) + GetArgument(1);
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new SumOperator();
-            }
-        }
-
-        public class MinusOperator : FunctionExpression
-        {
-            public MinusOperator() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return GetArgument(0) - GetArgument(1);
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new MinusOperator();
-            }
-        }
-
-
-
-
-        public sealed class VariableExpression : Expression
-        {
-            private string variableName;
-            public VariableExpression(string variableName)
-            {
-                this.variableName = variableName;
-            }
-
-            public override float Calculate()
-            {
-                return Context.GetVariableValue(variableName);
-            }
-        }
-        public sealed class NumberExpression : Expression
-        {
-            private float value;
-
-            public NumberExpression(float number)
-            {
-                value = number;
-            }
-
-            public NumberExpression(string number)
-            {
-                if (number.Contains('.'))
+                if (value.Contains('.'))
                 {
-                    number = number.Replace('.', ',');
+                    value = value.Replace('.', ',');
                 }
-                value = float.Parse(number);
+                return new NumberExpression(float.Parse(value));
             }
-
-            public override float Calculate()
+            catch (Exception exc) 
             {
-                return value;
+                throw new TreeCreateException("Can't create number node", exc);
             }
         }
 
-
-        public abstract class FunctionExpression : Expression
+        private Expression GetVariable(string variableName)
         {
-            private Expression[] arguments;
-
-            protected FunctionExpression(Expression[] arguments)
+            try
             {
-                this.arguments = arguments;
+                return new VariableExpression(Context.GetVariable(variableName));
             }
-
-            protected FunctionExpression(int argc)
+            catch (ObjectNotExistException exc)
             {
-                this.arguments = new Expression[argc];
+                throw new TreeCreateException("Can't create variable node", exc);
             }
+        }
 
-            public void SetArgument(int index, Expression value)
+        private Expression GetFunction(string functionName)
+        {
+            try
+            {
+                var function = Context.CreateFunction(functionName);
+                for (int i = function.Profile.ArgumentCount - 1; i >= 0; i--)
+                {
+                    function.SetArgument(i, buffer.Pop());
+                }
+                return function;
+            }
+            catch (ObjectNotExistException exc) 
+            {
+                throw new TreeCreateException("Can't create function node", exc);
+            }
+        }
+    }
+
+    public abstract class Expression
+    {
+        public float Calculate() 
+        {
+            try
+            {
+                return OnCalculate();
+            }
+            catch (Exception inner) 
+            {
+                throw new CalculationException("Error while calculating! ", inner);
+            }
+        }
+
+        protected abstract float OnCalculate();
+    }
+
+    public abstract class OperationExpression : Expression
+    {
+        protected readonly Expression left;
+        protected readonly Expression right;
+
+        public OperationExpression(Expression left, Expression right)
+        {
+            this.left = left;
+            this.right = right;
+        }
+
+        public abstract OperationExpression CreateSameOperator(Expression left, Expression right);
+    }
+
+    public class PowOperator : FunctionExpression
+    {
+        public PowOperator() : base( new FunctionProfile("^", 6, 2, false))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return (float)Math.Pow(GetArgument(0), GetArgument(1));
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new PowOperator();
+        }
+    }
+
+
+    public class MultiplyOperator : FunctionExpression
+    {
+        public MultiplyOperator() : base(new FunctionProfile("*", 4, 2))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return GetArgument(0) * GetArgument(1);
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new MultiplyOperator();
+        }
+    }
+
+    public class DevideOperator : FunctionExpression
+    {
+        public DevideOperator() : base(new FunctionProfile("/", 4, 2))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return GetArgument(0) / GetArgument(1);
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new DevideOperator();
+        }
+    }
+
+
+    public class SumOperator : FunctionExpression
+    {
+        public SumOperator() : base( new FunctionProfile("+", 2, 2) )
+        { }
+
+        protected override float OnCalculate()
+        {
+            return GetArgument(0) + GetArgument(1);
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new SumOperator();
+        }
+    }
+
+    public class MinusOperator : FunctionExpression
+    {
+        public MinusOperator() : base(new FunctionProfile("-", 2, 2))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return GetArgument(0) - GetArgument(1);
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new MinusOperator();
+        }
+    }
+
+    public sealed class VariableExpression : Expression
+    {
+        private Variable variable;
+        public VariableExpression(Variable variableName)
+        {
+            this.variable = variableName;
+        }
+
+        protected override float OnCalculate()
+        {
+            return variable.GetValue();
+        }
+    }
+
+    public sealed class NumberExpression : Expression
+    {
+        private float value;
+
+        public NumberExpression(float number)
+        {
+            value = number;
+        }
+
+        protected override float OnCalculate()
+        {
+            return value;
+        }
+    }
+
+    public abstract class FunctionExpression : Expression
+    {
+        private Expression[] arguments;
+        private FunctionProfile profile;
+
+        protected FunctionExpression(FunctionProfile profile)
+        {
+            this.arguments = new Expression[profile.ArgumentCount];
+            this.profile = profile; 
+        }
+
+        public FunctionProfile Profile
+        {
+            get
+            {
+                return profile;
+            }
+        }
+
+        public void SetArgument(int index, Expression value)
+        {
+            try
             {
                 arguments[index] = value;
             }
+            catch (IndexOutOfRangeException exc) 
+            {
+                throw new ArgumentException(String.Format("Can't set argument at {0} position", index), exc);
+            }
+        }
 
-            public float GetArgument(int index)
+        public float GetArgument(int index)
+        {
+            try
             {
                 return arguments[index].Calculate();
             }
-
-            public abstract FunctionExpression Clone();
-        }
-
-        public sealed class SinExpression : FunctionExpression
-        {
-            public SinExpression(Expression expression) : base(1)
+            catch (IndexOutOfRangeException exc) 
             {
-                SetArgument(0, expression);
-            }
-
-            public SinExpression() : base(1)
-            { }
-
-            public override float Calculate()
-            {
-                return (float)Math.Sin(GetArgument(0));
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new SinExpression();
+                throw new ArgumentException(String.Format("Get method exception: {0} - index out of range", index), exc);
             }
         }
 
-        public sealed class MaxExpression : FunctionExpression
-        {
-            public MaxExpression(Expression left, Expression right) : base(2)
-            {
-                SetArgument(0, left);
-                SetArgument(1, right);
-            }
-
-            public MaxExpression() : base(2)
-            { }
-
-            public override float Calculate()
-            {
-                return Math.Max(GetArgument(0), GetArgument(1));
-            }
-
-            public override FunctionExpression Clone()
-            {
-                return new MaxExpression();
-            }
-        }
-
+        public abstract FunctionExpression Clone();
     }
+
+    public sealed class SinExpression : FunctionExpression
+    {
+        public SinExpression(Expression expression) : base(new FunctionProfile("sin", 10, 1, false))
+        {
+            SetArgument(0, expression);
+        }
+
+        public SinExpression() : base(new FunctionProfile("sin", 10, 1, false))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return (float)Math.Sin(GetArgument(0));
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new SinExpression();
+        }
+    }
+
+    public sealed class MaxExpression : FunctionExpression
+    {
+        public MaxExpression(Expression left, Expression right) : base(new FunctionProfile("max", 10, 2, false))
+        {
+            SetArgument(0, left);
+            SetArgument(1, right);
+        }
+
+        public MaxExpression() : base(new FunctionProfile("max", 10, 2, false))
+        { }
+
+        protected override float OnCalculate()
+        {
+            return Math.Max(GetArgument(0), GetArgument(1));
+        }
+
+        public override FunctionExpression Clone()
+        {
+            return new MaxExpression();
+        }
+    }
+
+
 }
