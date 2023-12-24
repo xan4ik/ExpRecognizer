@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30907.101
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34322.80
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExpRecognizer", "ExpRecognizer\ExpRecognizer.csproj", "{AF33CF1D-A9A8-4F26-BCE2-A85FE578A0AD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExpressionRecognizer", "ExpressionRecognizer\ExpressionRecognizer.csproj", "{C654CCBA-0E4D-4E3C-82AC-09805EB5D834}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ShowUp", "ShowUp\ShowUp.csproj", "{3BA2D664-49F9-470B-8534-03E4139777F8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{AF33CF1D-A9A8-4F26-BCE2-A85FE578A0AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AF33CF1D-A9A8-4F26-BCE2-A85FE578A0AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AF33CF1D-A9A8-4F26-BCE2-A85FE578A0AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AF33CF1D-A9A8-4F26-BCE2-A85FE578A0AD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C654CCBA-0E4D-4E3C-82AC-09805EB5D834}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C654CCBA-0E4D-4E3C-82AC-09805EB5D834}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C654CCBA-0E4D-4E3C-82AC-09805EB5D834}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C654CCBA-0E4D-4E3C-82AC-09805EB5D834}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3BA2D664-49F9-470B-8534-03E4139777F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BA2D664-49F9-470B-8534-03E4139777F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3BA2D664-49F9-470B-8534-03E4139777F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3BA2D664-49F9-470B-8534-03E4139777F8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
